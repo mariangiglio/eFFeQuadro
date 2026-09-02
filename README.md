@@ -128,7 +128,7 @@ I file di input sono tipicamente estratti da immagini di floppy disk HFS tramite
 
 ## Temi grafici
 
-L'interfaccia supporta più temi visivi selezionabili dal menu **🎨 Temi**:
+L'interfaccia supporta più temi visivi selezionabili dal menu ** Temi**:
 `aquativo`, `adapta`, `black`, `blue`, `breeze`, `clearlooks`, `itft1`, `kroc`, `plastik`, `radiance`, `xpnative`.
 
 ---
