@@ -47,13 +47,7 @@ Installa le dipendenze con:
 pip install -r requirements.txt
 ```
 
-Contenuto di `requirements.txt`:
-
-```
-ttkthemes
-pandas
-matplotlib
-```
+Le dipendenze di terze parti sono `ttkthemes`, `pandas` e `matplotlib`.
 
 > **Nota per Linux:** `tkinter` non è incluso nella stdlib di default su alcune distribuzioni.
 > Installalo con:
@@ -79,8 +73,8 @@ Su Windows, `soffice.exe` deve trovarsi in `C:\Program Files\LibreOffice\program
 ## Installazione e avvio
 
 ```bash
-git clone https://github.com/mariangiglio/effe-quadro.git
-cd effe-quadro
+git clone https://github.com/mariangiglio/eFFeQuadro.git
+cd eFFeQuadro
 pip install -r requirements.txt
 python main.py
 ```
@@ -90,13 +84,15 @@ python main.py
 ## Struttura del progetto
 
 ```
-effe-quadro/
+eFFeQuadro/
 ├── main.py          # Entry point — avvia la GUI
 ├── gui.py           # Interfaccia grafica (tkinter + ttkthemes)
 ├── core.py          # Funzioni di parsing e analisi (HFS, MCW, MDB…)
 ├── hexmap.py        # Mappa esadecimale custom Mac Roman + funzione di decodifica
 ├── logo.ico         # Icona applicazione (opzionale)
 ├── requirements.txt
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
@@ -142,5 +138,7 @@ GitHub: [github.com/mariangiglio](https://github.com/mariangiglio)
 
 ## Licenza
 
-Questo software è distribuito per uso interno e didattico.
-Ogni altro utilizzo richiede autorizzazione esplicita dell'autore.
+Distribuito con licenza **MIT** — vedi il file [LICENSE](LICENSE).
+
+Il software è libero da usare, modificare e ridistribuire, anche a fini commerciali,
+a condizione di mantenere la nota di copyright. È fornito "così com'è", senza garanzie.
