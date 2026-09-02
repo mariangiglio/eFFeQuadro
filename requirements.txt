@@ -1,0 +1,9 @@
+# eFFeQuadro - Forensic Toolkit
+# Richiede Python 3.10 o superiore.
+#
+# tkinter NON è elencato qui: fa parte della standard library, ma su alcune
+# distribuzioni Linux va installato a parte (vedi README).
+
+ttkthemes>=3.2.0
+pandas>=1.5.0
+matplotlib>=3.6.0
