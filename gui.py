@@ -110,7 +110,7 @@ class HFSToolkitGUI:
                 "Sviluppato da Mariangela Giglio\n"
                 "Versione: 1.0\n"
                 "GitHub: https://github.com/mariangiglio\n"
-                "Licenza: uso interno / didattico"
+                "Licenza: MIT"
             )
         )
         menubar.add_cascade(label="ℹ️ Credits", menu=credits_menu)
