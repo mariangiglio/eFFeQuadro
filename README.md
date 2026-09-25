@@ -117,7 +117,6 @@ I file di input sono tipicamente estratti da immagini di floppy disk HFS tramite
 ## Strumenti consigliati in abbinamento
 
 - [hexed.it](https://hexed.it) — visualizzatore esadecimale online per ispezione preliminare
-- [HFSExplorer](https://www.catacombae.org/hfsexplorer/) — estrazione file da immagini HFS
 - LibreOffice — conversione e lettura file `.mcw`
 
 ---
