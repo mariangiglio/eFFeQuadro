@@ -1,4 +1,4 @@
-# eFFeQuadro — Forensic Toolkit
+# eFFeQuadro – Forensic Toolkit
 
 [English](README.md) · **Italiano**
 
