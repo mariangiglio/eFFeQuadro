@@ -1,4 +1,4 @@
-# eFFeQuadro — Forensic Toolkit
+# eFFeQuadro – Forensic Toolkit
 
 Strumento di analisi forense su volumi HFS e documenti Word per Macintosh classico (anni '80–'90).
 
