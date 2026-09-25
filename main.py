@@ -3,6 +3,12 @@ from gui import HFSToolkitGUI
 
 if __name__ == "__main__":
     root = ThemedTk(theme="itft1")
-    root.state("zoomed")
+    try:
+        root.state("zoomed")          # Windows (e macOS)
+    except Exception:
+        try:
+            root.attributes("-zoomed", True)   # Linux
+        except Exception:
+            pass                      # finestra alle dimensioni predefinite
     HFSToolkitGUI(root)
     root.mainloop()

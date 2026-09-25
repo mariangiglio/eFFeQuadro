@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import xml.etree.ElementTree as ET
 from hexmap import EXCLUDED_HEX_CODES, decode_custom_hex
+from i18n import t
 
 
 #======= FUNZIONE PER APRIRE FILE CON PROGRAMMA PREDEFINITO ==============================#
@@ -22,7 +23,7 @@ def open_with_default_app(path):
         else:  # Linux e altri
             subprocess.call(("xdg-open", path))
     except Exception as e:
-        print(f"Errore nell'apertura file: {e}")
+        print(t("err_open_file", e=e))
 
 
 # ------------- PARSER UTILS  --------------------------------------------------
@@ -34,7 +35,7 @@ def hfs_timestamp_to_datetime(hfs_ts: int) -> str:
     try:
         return (datetime(1904, 1, 1) + timedelta(seconds=hfs_ts)).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
-        return "Errore"
+        return t("date_error")
 
 # ---------- ALLOCATION / EXTENTS --------------------------------------------
 
@@ -49,87 +50,121 @@ def parse_allocation_bitmap(file_path: str):
 
 def parse_extents_overflow(file_path: str):
     """
-    Prova a leggere un file Extents Overflow sia come HFS+ (32 bit) che HFS (16 bit).
-    Restituisce una lista di dizionari con CNID, tipo fork e lista di extent.
+    Legge un file Extents Overflow (B-tree) di un volume HFS o HFS+.
+
+    Formato e dimensione dei nodi vengono letti dal nodo di intestazione
+    (nodo 0): maxKeyLength = 7 -> HFS, maxKeyLength = 10 -> HFS+.
+    Se l'intestazione non è leggibile (es. file parziale), si assume HFS
+    con nodi da 512 byte.
+
+    Vengono letti tutti i nodi foglia (tipo 0xFF = -1), compresi quelli
+    non più collegati all'albero, che possono conservare record residui.
+
+    Restituisce una lista di dizionari con:
+        CNID       - ID del file (catalog node ID)
+        Fork       - "Data" o "Resource"
+        FileBlock  - primo blocco del fork coperto da questo record
+        Extents    - lista di (blocco iniziale, numero di blocchi)
+        Format     - "HFS" o "HFS+"
     """
-    def try_hfsplus(data):
-        results = []
-        node_size = 512
-        for offset in range(0, len(data), node_size):
-            node = data[offset : offset + node_size]
-            if node[8] != 0x00:  # leaf node HFS+
-                continue
-            num_rec = struct.unpack(">H", node[10:12])[0]
-            for i in range(num_rec):
-                rec_off = struct.unpack(">H", node[node_size - 2 * (i + 1): node_size - 2 * i])[0]
-                try:
-                    key_len = struct.unpack(">H", node[rec_off:rec_off + 2])[0]
-                    fork_type = node[rec_off + 2]
-                    cnid = struct.unpack(">I", node[rec_off + 4 : rec_off + 8])[0]
-                    base = rec_off + 2 + key_len
-                    extents = []
-                    for j in range(8):
-                        s = struct.unpack(">I", node[base + j*8 : base + j*8 + 4])[0]
-                        c = struct.unpack(">I", node[base + j*8 + 4 : base + j*8 + 8])[0]
-                        if c == 0:
-                            break
-                        extents.append((s, c))
-                    if extents:
-                        results.append({
-                            "CNID": cnid,
-                            "Fork": "Data" if fork_type == 0 else "Resource",
-                            "Extents": extents
-                        })
-                except Exception:
-                    continue
-        return results
-
-    def try_hfs(data):
-        results = []
-        node_size = 512
-        for offset in range(0, len(data), node_size):
-            node = data[offset : offset + node_size]
-            if node[8] != 0xFF:  # leaf node HFS
-                continue
-            num_rec = struct.unpack(">H", node[10:12])[0]
-            for i in range(num_rec):
-                rec_off = struct.unpack(">H", node[node_size - 2 * (i + 1): node_size - 2 * i])[0]
-                try:
-                    key_len = node[rec_off]
-                    fork_type = node[rec_off + 1]
-                    cnid = struct.unpack(">I", node[rec_off + 2 : rec_off + 6])[0]
-                    aligned_len = key_len if key_len % 2 == 0 else key_len + 1
-                    base = rec_off + 1 + aligned_len
-                    extents = []
-                    for j in range(3):
-                        s = struct.unpack(">H", node[base + j*4 : base + j*4 + 2])[0]
-                        c = struct.unpack(">H", node[base + j*4 + 2 : base + j*4 + 4])[0]
-                        if c:
-                            extents.append((s, c))
-                    if extents:
-                        results.append({
-                            "CNID": cnid,
-                            "Fork": "Data" if fork_type == 0 else "Resource",
-                            "Extents": extents
-                        })
-                except Exception:
-                    continue
-        return results
-
-    # ---- carica i dati e prova in entrambi i modi: hfs e hfs+ ----
     with open(file_path, "rb") as f:
         data = f.read()
 
-    results_plus = try_hfsplus(data)
-    if results_plus:
-        return results_plus
+    # ---- nodo di intestazione: dimensione nodi e formato ----
+    node_size = 512
+    fmt = "HFS"
+    if len(data) >= 36 and data[8] == 0x01:  # 0x01 = header node
+        ns = struct.unpack(">H", data[32:34])[0]
+        max_key = struct.unpack(">H", data[34:36])[0]
+        if ns in (512, 1024, 2048, 4096, 8192, 16384, 32768):
+            node_size = ns
+        if max_key == 10:
+            fmt = "HFS+"
+        elif max_key != 7:
+            # chiave non standard: deduci il formato dalla dimensione dei nodi
+            fmt = "HFS+" if node_size > 512 else "HFS"
 
-    results_hfs = try_hfs(data)
-    return results_hfs
+    results = []
+    for offset in range(0, len(data) - node_size + 1, node_size):
+        node = data[offset : offset + node_size]
+        if node[8] != 0xFF:  # solo nodi foglia (kind = -1)
+            continue
+        num_rec = struct.unpack(">H", node[10:12])[0]
+        if num_rec == 0 or 14 + num_rec * 2 > node_size:
+            continue
 
+        for i in range(num_rec):
+            rec_off = struct.unpack(">H", node[node_size - 2 * (i + 1) : node_size - 2 * i])[0]
+            if rec_off < 14 or rec_off >= node_size - 2 * num_rec:
+                continue
+            try:
+                if fmt == "HFS":
+                    # chiave: keyLen(1)=7, forkType(1), fileID(4), startBlock(2)
+                    key_len = node[rec_off]
+                    if key_len != 7:
+                        continue
+                    fork_type = node[rec_off + 1]
+                    cnid = struct.unpack(">I", node[rec_off + 2 : rec_off + 6])[0]
+                    file_block = struct.unpack(">H", node[rec_off + 6 : rec_off + 8])[0]
+                    base = rec_off + 1 + key_len
+                    if base % 2:  # i record iniziano a offset pari
+                        base += 1
+                    # record: 3 extent da (startBlock u16, blockCount u16)
+                    n_ext, fmt_ext, ext_size = 3, ">HH", 4
+                else:
+                    # chiave: keyLength(2)=10, forkType(1), pad(1), fileID(4), startBlock(4)
+                    key_len = struct.unpack(">H", node[rec_off : rec_off + 2])[0]
+                    if key_len != 10:
+                        continue
+                    fork_type = node[rec_off + 2]
+                    cnid = struct.unpack(">I", node[rec_off + 4 : rec_off + 8])[0]
+                    file_block = struct.unpack(">I", node[rec_off + 8 : rec_off + 12])[0]
+                    base = rec_off + 2 + key_len
+                    # record: 8 extent da (startBlock u32, blockCount u32)
+                    n_ext, fmt_ext, ext_size = 8, ">II", 8
+
+                if base + n_ext * ext_size > node_size:
+                    continue
+
+                extents = []
+                for j in range(n_ext):
+                    s, c = struct.unpack(fmt_ext, node[base + j * ext_size : base + (j + 1) * ext_size])
+                    if c == 0:
+                        break
+                    extents.append((s, c))
+
+                if extents:
+                    results.append({
+                        "CNID": cnid,
+                        "Fork": "Data" if fork_type == 0x00 else "Resource" if fork_type == 0xFF else f"Unknown ({fork_type:#04x})",
+                        "FileBlock": file_block,
+                        "Extents": extents,
+                        "Format": fmt,
+                    })
+            except (struct.error, IndexError):
+                continue
+
+    return results
 
 
 # ---------- CATALOG PARSER ---------------------------------------------------
+
+# Tipi di record del Catalog HFS -> codice interno (indipendente dalla lingua)
+RECORD_TYPES = {
+    1: "folder",
+    2: "file",
+    3: "folder_thread",
+    4: "file_thread",
+}
+
+
+def record_type_label(entry: dict) -> str:
+    """Etichetta tradotta del tipo di record di una voce del Catalog."""
+    code = entry.get("Type", "unknown")
+    if code == "unknown":
+        return t("rectype_unknown", n=entry.get("TypeCode", "?"))
+    return t("rectype_" + code)
+
 
 def parse_catalog_btree(file_path: str):
     results = []
@@ -168,12 +203,9 @@ def parse_catalog_btree(file_path: str):
                     continue
 
                 cdr_type = block[record_start]
-                record_type_label = {
-                    1: "Cartella",
-                    2: "File",
-                    3: "Thread Cartella",
-                    4: "Thread File"
-                }.get(cdr_type, f"Tipo sconosciuto ({cdr_type})")
+                # codice interno fisso; l'etichetta tradotta si ottiene con
+                # record_type_label(entry) al momento della visualizzazione
+                record_type = RECORD_TYPES.get(cdr_type, "unknown")
 
                 cnid = "-"
                 cr_date = "-"
@@ -193,12 +225,13 @@ def parse_catalog_btree(file_path: str):
                     bk_date = hfs_timestamp_to_datetime(struct.unpack(">I", block[record_start + 52:record_start + 56])[0])
 
                 results.append({
-                    "Nome": name,
-                    "Tipo": record_type_label,
+                    "Name": name,
+                    "Type": record_type,
+                    "TypeCode": cdr_type,
                     "ParentID": par_id,
                     "CNID": cnid,
-                    "Creato": cr_date,
-                    "Modificato": md_date,
+                    "Created": cr_date,
+                    "Modified": md_date,
                     "Backup": bk_date
                 })
             except:
@@ -212,9 +245,10 @@ def parse_catalog_btree(file_path: str):
 def extract_ascii_strings(data: bytes, min_len: int = 4):
     return [m.decode("ascii", errors="ignore") for m in re.findall(rb"[ -~]{" + str(min_len).encode() + rb",}", data)]
 
+# codice di tipo -> chiave del testo descrittivo (vedi i18n.py)
 type_descriptions = {
-    "MSWDWDBN": "Microsoft Word Document",
-    "MSWDWTMP": "File temporaneo Word",
+    "MSWDWDBN": "desc_mswdwdbn",
+    "MSWDWTMP": "desc_mswdwtmp",
 }
 
 def parse_delete_log(file_path: str):
@@ -238,29 +272,29 @@ def parse_mdb(file_path: str):
         raw = f.read(2048)
     offset = 0 if raw[0:2] == b"BD" else 1024 if raw[1024:1026] == b"BD" else None
     if offset is None:
-        raise ValueError("Firma BD non trovata né a offset 0 né 0x400")
+        raise ValueError(t("mdb_no_sig"))
     data = raw[offset : offset + 162]
     def U16(b, s):
         return struct.unpack(">H", b[s : s + 2])[0]
     def U32(b, s):
         return struct.unpack(">I", b[s : s + 4])[0]
     fields = [
-        ("Firma del volume", data[0:2].decode("ascii", "replace")),
-        ("Data creazione", hfs_timestamp_to_datetime(U32(data, 2))),
-        ("Data modifica", hfs_timestamp_to_datetime(U32(data, 6))),
-        ("Flags volume", U16(data, 10)),
-        ("File in root", U16(data, 12)),
-        ("Blocco bitmap", U16(data, 14)),
-        ("Next alloc", U16(data, 16)),
-        ("Numero blocchi alloc", U16(data, 18)),
-        ("Dim. blocco alloc", U32(data, 20)),
-        ("Clump default", U32(data, 24)),
-        ("Blocco ext overflow", U16(data, 28)),
-        ("CNID prossimo catalogo", U32(data, 30)),
-        ("Blocchi liberi", U16(data, 34)),
-        ("Lunghezza etichetta", data[36]),
-        ("Etichetta volume", data[37:64].decode("ascii", "replace").strip()),
-        ("Data backup", hfs_timestamp_to_datetime(U32(data, 64))),
+        (t("mdb_signature"), data[0:2].decode("ascii", "replace")),
+        (t("mdb_created"), hfs_timestamp_to_datetime(U32(data, 2))),
+        (t("mdb_modified"), hfs_timestamp_to_datetime(U32(data, 6))),
+        (t("mdb_flags"), U16(data, 10)),
+        (t("mdb_root_files"), U16(data, 12)),
+        (t("mdb_bitmap_block"), U16(data, 14)),
+        (t("mdb_next_alloc"), U16(data, 16)),
+        (t("mdb_alloc_blocks"), U16(data, 18)),
+        (t("mdb_alloc_size"), U32(data, 20)),
+        (t("mdb_clump"), U32(data, 24)),
+        (t("mdb_first_alloc"), U16(data, 28)),
+        (t("mdb_next_cnid"), U32(data, 30)),
+        (t("mdb_free_blocks"), U16(data, 34)),
+        (t("mdb_label_len"), data[36]),
+        (t("mdb_label"), data[37:64].decode("ascii", "replace").strip()),
+        (t("mdb_backup"), hfs_timestamp_to_datetime(U32(data, 64))),
     ]
     summary = "================ MDB SUMMARY ================\n\n"
     for name, value in fields:
@@ -323,7 +357,7 @@ def extract_after_etx_mcw(path: str, exclude_hex: set = None):
         content = f.read()
 
     if len(content) <= 0xF0:
-        raise ValueError("File troppo corto o non valido")
+        raise ValueError(t("mcw_too_short"))
 
     data = content[0xF0:]
     marker_idx = -1
@@ -338,7 +372,7 @@ def extract_after_etx_mcw(path: str, exclude_hex: set = None):
             break
 
     if marker_idx == -1:
-        raise ValueError("Sequenza ETX non trovata nel file")
+        raise ValueError(t("etx_not_found"))
 
     # Testo dopo ETX
     after = data[marker_idx + marker_len:]
@@ -388,7 +422,7 @@ def estrai_prima_stesura_hex_da_mcw_bytes(data: bytes) -> str:
     memorizzato a 0x1A–0x1B (big-endian).
     """
     if len(data) < HEADER_END_OFFSET_POS[1]:
-        raise ValueError("File troppo corto per contenere l'offset di chiusura")
+        raise ValueError(t("mcw_no_end_offset"))
 
     end_offset = int.from_bytes(
         data[HEADER_END_OFFSET_POS[0]:HEADER_END_OFFSET_POS[1]],
@@ -396,10 +430,7 @@ def estrai_prima_stesura_hex_da_mcw_bytes(data: bytes) -> str:
     )
 
     if end_offset <= TEXT_START_OFFSET:
-        raise ValueError(
-            f"Offset di chiusura sospetto ({end_offset:#x}), "
-            f"dovrebbe essere > {TEXT_START_OFFSET:#x}"
-        )
+        raise ValueError(t("mcw_bad_end_offset", end=end_offset, start=TEXT_START_OFFSET))
 
     if end_offset > len(data):
         # se l'offset è oltre la fine, fai fallback alla lunghezza reale
@@ -424,10 +455,7 @@ def trova_soffice_path() -> str:
             return c  # ci affidiamo al PATH
         if os.path.exists(c):
             return c
-    raise FileNotFoundError(
-        "Non è stato trovato LibreOffice.\n"
-        "Installa LibreOffice oppure aggiungi 'soffice' al PATH di sistema."
-    )
+    raise FileNotFoundError(t("lo_not_found"))
 
 
 def converti_mcw_in_odt(mcw_path: str) -> str:
@@ -455,17 +483,14 @@ def converti_mcw_in_odt(mcw_path: str) -> str:
         text=True
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Errore LibreOffice (codice {result.returncode}).\n\n"
-            f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
-        )
+        raise RuntimeError(t("lo_error", code=result.returncode, out=result.stdout, err=result.stderr))
 
     odt_path = outdir / (Path(mcw_path).stem + ".odt")
     if not odt_path.exists():
         # fallback: primo .odt nella cartella
         odts = list(outdir.glob("*.odt"))
         if not odts:
-            raise FileNotFoundError("LibreOffice non ha prodotto alcun file ODT.")
+            raise FileNotFoundError(t("lo_no_odt"))
         odt_path = odts[0]
 
     return str(odt_path)
@@ -530,14 +555,14 @@ def estrai_date_catalog(directory):
                     records = parse_catalog_btree(path)
                     for rec in records:
                         risultati.append({
-                            "Nome": rec.get("Nome", ""),
-                            "Creato": rec.get("Creato", ""),
-                            "Modificato": rec.get("Modificato", ""),
+                            "Name": rec.get("Name", ""),
+                            "Created": rec.get("Created", ""),
+                            "Modified": rec.get("Modified", ""),
                             "Backup": rec.get("Backup", ""),
-                            "Percorso": path
+                            "Path": path
                         })
                 except Exception as e:
-                    print(f"Errore parsing {path}: {e}")
+                    print(t("err_parsing_path", path=path, e=e))
                     continue
 
     return pd.DataFrame(risultati)

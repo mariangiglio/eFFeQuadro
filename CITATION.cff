@@ -1,14 +1,14 @@
 cff-version: 1.2.0
-message: "Se utilizzi questo software, citalo come indicato di seguito."
+message: "If you use this software, please cite it as below."
 type: software
 title: "eFFeQuadro — Forensic Toolkit"
 abstract: >-
-  Strumento di analisi forense per volumi HFS/HFS+ e documenti Microsoft Word
-  per Macintosh classico (anni '80–'90). Analizza Catalog, Extents Overflow,
-  bitmap di allocazione e Master Directory Block; recupera frammenti Word
-  dallo spazio non allocato; estrae il testo nascosto dai file .mcw e
-  confronta stesure successive. Sviluppato a supporto della ricerca di
-  filologia forense su archivi letterari nati digitali.
+  A forensic analysis tool for HFS volumes and Microsoft Word for Macintosh
+  documents from the classic Mac era (1980s–1990s). It analyses the Catalog
+  B-tree, the Extents Overflow file, the allocation bitmap and the Master
+  Directory Block; recovers Word fragments from unallocated space; extracts
+  hidden text from .mcw files and compares successive drafts. Developed to
+  support research in forensic philology on born-digital literary archives.
 authors:
   - family-names: Giglio
     given-names: Mariangela
