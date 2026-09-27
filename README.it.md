@@ -147,7 +147,7 @@ L'interfaccia supporta più temi visivi selezionabili dal menu **🎨 Temi**:
 
 Se usi eFFeQuadro nella tua ricerca, ti chiedo di citarlo. I metadati per la citazione sono nel file [CITATION.cff](CITATION.cff); il pulsante **"Cite this repository"** di GitHub (colonna destra) li restituisce in formato APA e BibTeX.
 
-> Giglio, M. (2026). *eFFeQuadro — Forensic Toolkit* (Versione 1.0.0) [Software]. Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
+> Giglio, M. (2026). *eFFeQuadro — Forensic Toolkit* (Versione 1.0.0) [Software]. Zenodo. https://doi.org/10.5281/zenodo.22963345
 
 ---
 
