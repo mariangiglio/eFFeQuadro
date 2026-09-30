@@ -166,6 +166,18 @@ def record_type_label(entry: dict) -> str:
     return t("rectype_" + code)
 
 
+def _is_valid_leaf(block, num_records, node_size):
+    """Controlla che un blocco sia davvero un nodo foglia HFS ben formato."""
+    if block[9] != 1 or num_records == 0 or num_records > (node_size - 14) // 2:
+        return False
+    offsets = [struct.unpack(">H", block[node_size - 2 * (i + 1):node_size - 2 * i])[0]
+               for i in range(num_records)]
+    # il primo record inizia subito dopo il descrittore (14 byte), gli altri seguono in ordine
+    return (offsets[0] == 14
+            and all(a < b for a, b in zip(offsets, offsets[1:]))
+            and offsets[-1] < node_size - 2 * num_records)
+
+
 def parse_catalog_btree(file_path: str):
     results = []
     NODE_SIZE = 512
@@ -174,7 +186,7 @@ def parse_catalog_btree(file_path: str):
 
     for offset in range(0, len(data), NODE_SIZE):
         block = data[offset:offset + NODE_SIZE]
-        if len(block) < 14:
+        if len(block) < NODE_SIZE:  # nodo incompleto a fine file
             continue
 
         kind = block[8]
@@ -182,6 +194,8 @@ def parse_catalog_btree(file_path: str):
             continue
 
         num_records = struct.unpack(">H", block[10:12])[0]
+        if not _is_valid_leaf(block, num_records, NODE_SIZE):
+            continue  # dati che sembrano un nodo foglia ma non lo sono
         for i in range(num_records):
             rec_off = struct.unpack(">H", block[NODE_SIZE - ((i + 1) * 2):NODE_SIZE - (i * 2)])[0]
             try:
