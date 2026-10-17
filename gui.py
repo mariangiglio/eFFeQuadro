@@ -399,7 +399,7 @@ class HFSToolkitGUI:
 
 
     def _load_catalog(self):
-        path = filedialog.askopenfilename(title=t("select_catalog"), filetypes=[(t("all_files"), ""*"")])
+        path = filedialog.askopenfilename(title=t("select_catalog"), filetypes=[(t("all_files"), "*")])
         if not path:
             return
         try:
@@ -534,7 +534,7 @@ class HFSToolkitGUI:
         self._delete_results = []
 
     def _load_delete_log(self):
-        path = filedialog.askopenfilename(title=t("select_delete"), filetypes=[(t("all_files"), ""*"")])
+        path = filedialog.askopenfilename(title=t("select_delete"), filetypes=[(t("all_files"), "*")])
         if not path:
             return
         self._delete_log_current_path = path  # ✅ salva path
@@ -595,7 +595,7 @@ class HFSToolkitGUI:
         ).pack(side="right", padx=5)
 
     def _load_mdb(self):
-        path = filedialog.askopenfilename(title=t("select_mdb"), filetypes=[(t("all_files"), ""*"")])
+        path = filedialog.askopenfilename(title=t("select_mdb"), filetypes=[(t("all_files"), "*")])
         if not path:
             return
         self._mdb_current_path = path  # salva path file
@@ -777,7 +777,7 @@ class HFSToolkitGUI:
         open_with_default_app(self._mcw_current_path)
 
     def _load_mcw(self):
-        path = filedialog.askopenfilename(title=t("select_mcw"), filetypes=[(t("all_files"), ""*"")])
+        path = filedialog.askopenfilename(title=t("select_mcw"), filetypes=[(t("all_files"), "*")])
         if not path:
             return
         try:
@@ -915,7 +915,7 @@ class HFSToolkitGUI:
     def _select_mcw_for_compare(self):
         path = filedialog.askopenfilename(
             title=t("select_mcw"),
-            filetypes=[(t("all_files"), ""*"")]
+            filetypes=[(t("all_files"), "*")]
         )
         if path:
             self.mcw_compare_path_var.set(path)
